@@ -2,6 +2,28 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, waitFor } from '@testing-library/react';
 import { screen, fireEvent } from '@testing-library/dom';
 import TipButton from './TipButton';
+import * as animationUtils from '../../utils/animationUtils';
+
+// Mock localStorage
+const localStorageMock = (() => {
+  let store: Record<string, string> = {};
+  return {
+    getItem: vi.fn((key: string) => store[key] || null),
+    setItem: vi.fn((key: string, value: string) => {
+      store[key] = value.toString();
+    }),
+    removeItem: vi.fn((key: string) => {
+      delete store[key];
+    }),
+    clear: vi.fn(() => {
+      store = {};
+    }),
+  };
+})();
+
+Object.defineProperty(window, 'localStorage', {
+  value: localStorageMock,
+});
 
 // ─── Mocks ─────────────────────────────────────────────────────────────────────
 
@@ -73,12 +95,10 @@ describe('TipButton', () => {
     });
 
     it('disables coins when reduced motion is active', () => {
-        const { useReducedMotion } = require('../../utils/animationUtils');
-        useReducedMotion.mockReturnValue(true);
-        const { generateCoinParticles } = require('../../utils/animationUtils');
+        vi.mocked(animationUtils.useReducedMotion).mockReturnValue(true);
 
         render(<TipButton amount={5} onTip={mockOnTip} />);
         fireEvent.click(screen.getByRole('button', { name: /tip/i }));
-        expect(generateCoinParticles).not.toHaveBeenCalled();
+        expect(animationUtils.generateCoinParticles).not.toHaveBeenCalled();
     });
 });

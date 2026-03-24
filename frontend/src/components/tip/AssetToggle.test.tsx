@@ -47,7 +47,7 @@ describe('AssetToggle', () => {
 
     it('shows conversion rate', () => {
         render(<AssetToggle {...defaultProps} />);
-        expect(screen.getByText(/≈ \$1.0/)).toBeInTheDocument();
+        expect(screen.getByText(/≈ \$1.10/)).toBeInTheDocument();
     });
 
     it('shows insufficient balance warning when needed', () => {

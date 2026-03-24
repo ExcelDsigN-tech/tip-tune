@@ -20,6 +20,8 @@ import AssetToggle from './AssetToggle';
 import TipMessage from './TipMessage';
 import GiftRecipientSearch from './GiftRecipientSearch';
 import ConfettiExplosion from './ConfettiExplosion';
+import ProcessingAnimation, { ProcessingPhase } from './ProcessingAnimation';
+import { useLiveRegion } from '../a11y/LiveRegion';
 import type { GiftUserRef } from '../../types';
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
@@ -65,7 +67,7 @@ const ORDERED_STEPS: Array<Exclude<GiftTipStep, 'loading' | 'success'>> = [
 
 /* ─── Component ──────────────────────────────────────────────────────────── */
 
-const GiftTipModal: React.FC<GiftTipModalProps> = ({
+const GiftTipModal = React.forwardRef<HTMLDivElement, GiftTipModalProps>(({
   isOpen,
   onClose,
   artistId,
@@ -75,7 +77,7 @@ const GiftTipModal: React.FC<GiftTipModalProps> = ({
   walletBalance = { xlm: 1000, usdc: 100 },
   xlmUsdRate = 0.11,
   trackId,
-}) => {
+}, ref) => {
   const reducedMotion = useReducedMotion();
 
   /* ── State ── */
@@ -89,6 +91,10 @@ const GiftTipModal: React.FC<GiftTipModalProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [giftResult, setGiftResult] = useState<{ giftId: string; shareUrl: string } | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [processingPhase, setProcessingPhase] = useState<ProcessingPhase>('idle');
+  const { announce } = useLiveRegion();
+  const internalRef = React.useRef<HTMLDivElement>(null);
+  const sheetRef = (ref as React.RefObject<HTMLDivElement>) || internalRef;
 
   /* ── Reset state on close ── */
   const resetState = useCallback(() => {
@@ -109,14 +115,28 @@ const GiftTipModal: React.FC<GiftTipModalProps> = ({
     onClose();
   }, [resetState, onClose]);
 
-  /* ── Keyboard close ── */
+  /* ── Keyboard & Focus Close ── */
   useEffect(() => {
     if (!isOpen) return;
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') handleClose(); };
     document.addEventListener('keydown', handler);
     document.body.style.overflow = 'hidden';
+
+    // Focus trap
+    const handleFocusTrap = (e: KeyboardEvent) => {
+        if (e.key !== 'Tab') return;
+        const focusable = sheetRef.current?.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+        if (!focusable?.length) return;
+        const first = focusable[0] as HTMLElement;
+        const last = focusable[focusable.length - 1] as HTMLElement;
+        if (e.shiftKey && document.activeElement === first) { last.focus(); e.preventDefault(); }
+        else if (!e.shiftKey && document.activeElement === last) { first.focus(); e.preventDefault(); }
+    };
+    document.addEventListener('keydown', handleFocusTrap);
+
     return () => {
       document.removeEventListener('keydown', handler);
+      document.removeEventListener('keydown', handleFocusTrap);
       document.body.style.overflow = 'unset';
     };
   }, [isOpen, handleClose]);
@@ -127,7 +147,11 @@ const GiftTipModal: React.FC<GiftTipModalProps> = ({
   const handleNext = useCallback(() => {
     if (step === 'amount') { setStep('recipient'); return; }
     if (step === 'recipient') {
-      if (!recipient) { setError('Please select a recipient.'); return; }
+      if (!recipient) { 
+        setError('Please select a recipient.'); 
+        announce('Please select a recipient.', 'assertive');
+        return; 
+      }
       setError(null);
       setStep('messages');
       return;
@@ -145,6 +169,7 @@ const GiftTipModal: React.FC<GiftTipModalProps> = ({
   const handleConfirm = useCallback(async () => {
     if (!recipient) return;
     setStep('loading');
+    setProcessingPhase('processing');
     setError(null);
     try {
       const payload: GiftTipPayload = {
@@ -158,18 +183,24 @@ const GiftTipModal: React.FC<GiftTipModalProps> = ({
         isAnonymous,
       };
 
-      // Fallback mock when no handler provided
       const result = onGiftSuccess
         ? await onGiftSuccess(payload)
         : await mockGiftTip(payload);
 
+      setProcessingPhase('confirming');
+      await new Promise(r => setTimeout(r, 2000));
+
       setGiftResult(result);
+      setProcessingPhase('success');
       setStep('success');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to send gift tip');
+      const msg = err instanceof Error ? err.message : 'Failed to send gift tip';
+      setError(msg);
+      announce(msg, 'assertive');
       setStep('options');
+      setProcessingPhase('idle');
     }
-  }, [recipient, artistId, trackId, tipAmount, currency, artistMessage, giftNote, isAnonymous, onGiftSuccess]);
+  }, [recipient, artistId, trackId, tipAmount, currency, artistMessage, giftNote, isAnonymous, onGiftSuccess, announce]);
 
   /* ── Copy share link ── */
   const handleCopyLink = useCallback(async () => {
@@ -210,6 +241,7 @@ const GiftTipModal: React.FC<GiftTipModalProps> = ({
       data-testid="gift-tip-modal-backdrop"
     >
       <animated.div
+        ref={sheetRef}
         style={{
           ...sheetSpring,
           position: 'fixed',
@@ -222,10 +254,11 @@ const GiftTipModal: React.FC<GiftTipModalProps> = ({
           borderTop: '1px solid rgba(147,51,234,0.3)',
           overflowY: 'auto',
         }}
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e: React.MouseEvent) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
-        aria-label="Gift a Tip"
+        aria-labelledby="gift-tip-modal-title"
+        aria-describedby="gift-tip-modal-description"
         data-testid="gift-tip-modal"
       >
         {/* ── Header ── */}
@@ -246,9 +279,12 @@ const GiftTipModal: React.FC<GiftTipModalProps> = ({
               )}
               <div className="flex items-center gap-2">
                 <Gift className="h-5 w-5 text-purple-400" />
-                <h2 className="text-lg font-display font-bold text-white">
+                <h2 id="gift-tip-modal-title" className="text-lg font-display font-bold text-white">
                   {step === 'success' ? 'Gift Sent! 🎁' : step === 'loading' ? 'Sending Gift…' : 'Gift a Tip'}
                 </h2>
+                <p id="gift-tip-modal-description" className="sr-only">
+                   Modal to gift a tip to a friend on behalf of {artistName}.
+                </p>
               </div>
             </div>
             {step !== 'loading' && (
@@ -402,13 +438,8 @@ const GiftTipModal: React.FC<GiftTipModalProps> = ({
 
           {/* ── STEP: loading ── */}
           {step === 'loading' && (
-            <div className="flex flex-col items-center justify-center py-12 gap-4" data-testid="step-loading">
-              <div className="relative">
-                <Gift className="h-14 w-14 text-purple-400" />
-                <div className="absolute inset-0 rounded-full border-2 border-purple-400 animate-ping opacity-50" />
-              </div>
-              <p className="text-lg font-semibold text-white animate-pulse">Sending your gift tip…</p>
-              <p className="text-sm text-gray-400">Processing on Stellar network</p>
+            <div className="flex flex-col items-center justify-center py-12" data-testid="step-loading">
+              <ProcessingAnimation phase={processingPhase} />
             </div>
           )}
 
@@ -473,9 +504,8 @@ const GiftTipModal: React.FC<GiftTipModalProps> = ({
             ) : (
               <button
                 onClick={handleNext}
-                disabled={step === 'recipient' && !recipient}
                 className="w-full rounded-xl bg-purple-600 py-3.5 font-display font-bold text-white
-                  hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  hover:bg-purple-700 transition-colors"
                 data-testid="next-step-btn"
               >
                 {step === 'amount' ? 'Choose Recipient →' : step === 'recipient' ? 'Add Messages →' : 'Review Gift →'}
@@ -486,7 +516,7 @@ const GiftTipModal: React.FC<GiftTipModalProps> = ({
       </animated.div>
     </animated.div>
   );
-};
+});
 
 /* ─── Helper sub-components ──────────────────────────────────────────────── */
 
@@ -494,6 +524,10 @@ const ReviewRow: React.FC<{ label: string; value: string; isProtected?: boolean 
   label,
   value,
   isProtected,
+}: {
+  label: string;
+  value: string;
+  isProtected?: boolean;
 }) => (
   <div className="flex justify-between gap-3 px-4 py-2.5">
     <span className="text-gray-400 flex-shrink-0">{label}</span>

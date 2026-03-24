@@ -47,9 +47,9 @@ describe('ProcessingAnimation', () => {
         expect(screen.getByRole('status')).toBeInTheDocument();
     });
 
-    it('calls onComplete after success phase (reduced motion fast path)', () => {
-        const { useReducedMotion } = require('../../utils/animationUtils');
-        useReducedMotion.mockReturnValue(true);
+    it('calls onComplete after success phase (reduced motion fast path)', async () => {
+        const { useReducedMotion } = await import('../../utils/animationUtils');
+        (useReducedMotion as any).mockReturnValue(true);
 
         vi.useFakeTimers();
         const onComplete = vi.fn();

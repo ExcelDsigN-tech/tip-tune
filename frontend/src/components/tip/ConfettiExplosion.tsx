@@ -116,8 +116,8 @@ const ConfettiExplosion: React.FC<ConfettiExplosionProps> = ({
         return stopAnimation;
     }, [active, originX, originY, count, reducedMotion, stopAnimation, onComplete]);
 
-    // Not active — render nothing
-    if (!active) return null;
+    // Not active or reduced motion — render nothing
+    if (!active || reducedMotion) return null;
 
     return (
         <canvas

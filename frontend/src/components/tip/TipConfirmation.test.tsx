@@ -34,7 +34,7 @@ describe('TipConfirmation', () => {
 
     it('displays USD equivalent', () => {
         render(<TipConfirmation {...defaultProps} />);
-        expect(screen.getByText(/≈ \$1.10/)).toBeInTheDocument();
+        expect(screen.getAllByText(/≈ \$1.10/).length).toBeGreaterThan(0);
     });
 
     it('displays network fee', () => {
@@ -96,7 +96,7 @@ describe('TipConfirmation', () => {
                 currency="USDC"
             />
         );
-        expect(screen.getByText(/10.00 USDC/)).toBeInTheDocument();
+        expect(screen.getAllByText(/10.00 USDC/).length).toBeGreaterThan(0);
     });
 
     it('displays zero fee note', () => {

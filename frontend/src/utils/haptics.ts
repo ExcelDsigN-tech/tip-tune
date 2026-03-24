@@ -74,7 +74,9 @@ export class HapticFeedback {
         if (!HapticFeedback.isSupported) return;
 
         try {
-            navigator.vibrate(0);
+            if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+                navigator.vibrate(0);
+            }
         } catch (error) {
             console.warn('Stopping haptic feedback failed:', error);
         }

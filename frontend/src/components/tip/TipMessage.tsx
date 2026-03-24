@@ -82,6 +82,7 @@ const TipMessage: React.FC<TipMessageProps> = ({
                         handleAutoResize(e);
                     }}
                     placeholder={placeholder}
+                    maxLength={maxLength}
                     className="w-full px-4 py-3 rounded-lg bg-navy/50 border border-blue-primary/20 
                     text-white placeholder-gray-500 text-sm resize-none
                     focus:border-blue-primary/60 focus:outline-none focus:ring-2 focus:ring-blue-primary/30

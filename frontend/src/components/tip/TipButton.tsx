@@ -14,7 +14,7 @@ export interface TipButtonProps {
     className?: string;
 }
 
-const TipButton: React.FC<TipButtonProps> = ({
+const TipButton = React.forwardRef<HTMLButtonElement, TipButtonProps>(({
     amount,
     currency = 'XLM',
     onTip,
@@ -23,12 +23,13 @@ const TipButton: React.FC<TipButtonProps> = ({
     variant = 'primary',
     label,
     className = '',
-}) => {
+}, ref) => {
     const reducedMotion = useReducedMotion();
     const [coins, setCoins] = useState<CoinParticle[]>([]);
     const [ripples, setRipples] = useState<{ id: number; x: number; y: number }[]>([]);
     const [clickScale, setClickScale] = useState(false);
-    const btnRef = useRef<HTMLButtonElement>(null);
+    const internalRef = useRef<HTMLButtonElement>(null);
+    const btnRef = (ref as React.RefObject<HTMLButtonElement>) || internalRef;
     const rippleIdRef = useRef(0);
 
     // Spring for the button scale (bounce on press)
@@ -149,6 +150,6 @@ const TipButton: React.FC<TipButtonProps> = ({
             </animated.button>
         </div>
     );
-};
+});
 
 export default TipButton;

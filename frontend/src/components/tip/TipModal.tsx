@@ -12,6 +12,8 @@ import { getSafeAreaInsets, setupSafeAreaInsets } from '../../utils/gestures';
 import AmountSelector from './AmountSelector';
 import TipMessage from './TipMessage';
 import TipConfirmation from './TipConfirmation';
+import ProcessingAnimation, { ProcessingPhase } from './ProcessingAnimation';
+import { useLiveRegion } from '../a11y/LiveRegion';
 
 export interface TipModalProps {
     isOpen: boolean;
@@ -40,7 +42,7 @@ const TipModal: React.FC<TipModalProps> = ({
     onGiftTip,
     walletBalance = { xlm: 1000, usdc: 100 },
     xlmUsdRate = 0.11,
-}) => {
+}: TipModalProps) => {
     const reducedMotion = useReducedMotion();
     const haptic = useHaptic();
     const safeAreaRef = useRef<HTMLDivElement>(null);
@@ -54,6 +56,12 @@ const TipModal: React.FC<TipModalProps> = ({
     const [message, setMessage] = useState('');
     const [isDismissing, setIsDismissing] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [processingPhase, setProcessingPhase] = useState<ProcessingPhase>('idle');
+    const [txHash, setTxHash] = useState<string | undefined>(undefined);
+    const { announce } = useLiveRegion();
+
+    const amountRef = useRef<HTMLButtonElement>(null);
+    const closeRef = useRef<HTMLButtonElement>(null);
 
     // Initialize safe area insets on mount
     useEffect(() => {
@@ -79,22 +87,46 @@ const TipModal: React.FC<TipModalProps> = ({
         };
     }, [isOpen]);
 
-    // Swipe gesture handler
-    const handleSwipeDown = useCallback(
-        (gesture: any) => {
-            if (gesture.distance < 80) return; // Minimum distance to dismiss
+    // Focus trap implementation
+    useEffect(() => {
+        if (!isOpen) return;
 
-            haptic.trigger('selection');
-            setIsDismissing(true);
-            setTimeout(() => handleClose(), 300);
-        },
-        [haptic]
-    );
+        const handleFocusTrap = (e: KeyboardEvent) => {
+            if (e.key !== 'Tab') return;
 
-    useSwipeGesture(sheetRef, {
-        onSwipeDown: handleSwipeDown,
-        enabled: isOpen && step === 'amount',
-    });
+            const focusableElements = sheetRef.current?.querySelectorAll(
+                'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+            );
+            
+            if (!focusableElements || focusableElements.length === 0) return;
+
+            const firstElement = focusableElements[0] as HTMLElement;
+            const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement;
+
+            if (e.shiftKey) {
+                if (document.activeElement === firstElement) {
+                    lastElement.focus();
+                    e.preventDefault();
+                }
+            } else {
+                if (document.activeElement === lastElement) {
+                    firstElement.focus();
+                    e.preventDefault();
+                }
+            }
+        };
+
+        document.addEventListener('keydown', handleFocusTrap);
+        // Set initial focus to the amount selector or close button
+        setTimeout(() => {
+            const firstButton = sheetRef.current?.querySelector('button');
+            if (firstButton) (firstButton as HTMLElement).focus();
+        }, 100);
+
+        return () => {
+            document.removeEventListener('keydown', handleFocusTrap);
+        };
+    }, [isOpen]);
 
     const handleClose = useCallback(() => {
         setIsDismissing(true);
@@ -135,22 +167,34 @@ const TipModal: React.FC<TipModalProps> = ({
 
     const handleConfirmTip = useCallback(async () => {
         setStep('loading');
+        setProcessingPhase('processing');
         haptic.trigger('medium');
 
         try {
+            // Simulate the stages of a blockchain transaction for better visual feedback
+            // In a real app, these would be linked to actual bridge/wallet events
             await onTipSuccess?.(tipAmount, currency, message);
+            
+            setProcessingPhase('confirming');
+            // Simulate confirmation delay
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
             haptic.trigger('success');
+            setProcessingPhase('success');
             setStep('success');
 
             setTimeout(() => {
                 handleClose();
-            }, 1500);
+            }, 2000);
         } catch (err) {
             haptic.trigger('error');
-            setError(err instanceof Error ? err.message : 'Failed to send tip');
+            const errorMessage = err instanceof Error ? err.message : 'Failed to send tip';
+            setError(errorMessage);
+            announce(errorMessage, 'assertive');
             setStep('confirmation');
+            setProcessingPhase('idle');
         }
-    }, [tipAmount, currency, message, onTipSuccess, haptic, handleClose]);
+    }, [tipAmount, currency, message, onTipSuccess, haptic, handleClose, announce]);
 
     // Content animation based on step
     const fadeSpring = useSpring({
@@ -199,10 +243,11 @@ const TipModal: React.FC<TipModalProps> = ({
                     maxWidth: '100vw',
                     paddingBottom: `${bottomPadding}px`,
                 }}
-                onClick={(e) => e.stopPropagation()}
+                onClick={(e: React.MouseEvent) => e.stopPropagation()}
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="tip-modal-title"
+                aria-describedby="tip-modal-description"
             >
                 {/* Drag Handle */}
                 <div className="flex flex-col items-center gap-3 px-4 py-3">
@@ -223,6 +268,9 @@ const TipModal: React.FC<TipModalProps> = ({
                             <h1 id="tip-modal-title" className="text-lg font-semibold text-white">
                                 Tip {artistName}
                             </h1>
+                            <p id="tip-modal-description" className="sr-only">
+                                Modal to send a tip in XLM or USDC to {artistName}. Supports messages and gifts.
+                            </p>
                         </div>
                     </div>
                     <button
@@ -277,23 +325,23 @@ const TipModal: React.FC<TipModalProps> = ({
 
                     {step === 'loading' && (
                         <div className="flex flex-col items-center justify-center py-12">
-                            <div className="relative w-12 h-12 mb-4">
-                                <div className="absolute inset-0 rounded-full border-2 border-blue-primary/20" />
-                                <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-blue-primary animate-spin" />
-                            </div>
-                            <p className="text-gray-400 text-sm">Sending tip...</p>
+                            <ProcessingAnimation 
+                                phase={processingPhase} 
+                                txHash={txHash}
+                                onComplete={() => setStep('success')}
+                            />
                         </div>
                     )}
 
                     {step === 'success' && (
                         <div className="flex flex-col items-center justify-center py-12">
-                            <div className="w-12 h-12 rounded-full bg-green-500/20 flex items-center justify-center mb-4 animate-success-pop">
-                                <svg className="w-6 h-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                </svg>
-                            </div>
-                            <p className="text-white font-medium">Tip sent!</p>
-                            <p className="text-gray-400 text-sm mt-1">Thank you for supporting {artistName}</p>
+                            <ProcessingAnimation 
+                                phase="success" 
+                                onComplete={handleClose}
+                            />
+                            <p className="text-gray-400 text-sm mt-4 italic animate-pulse">
+                                Transaction confirmed on Stellar
+                            </p>
                         </div>
                     )}
                 </div>
@@ -329,7 +377,16 @@ const StepAmount: React.FC<
     walletBalance,
     xlmUsdRate,
     reducedMotion,
-}) => {
+}: {
+    amount: number;
+    currency: 'XLM' | 'USDC';
+    onAmountChange: (amount: number) => void;
+    onCurrencyToggle: (currency: 'XLM' | 'USDC') => void;
+    onNext: () => void;
+    onGiftTip?: () => void;
+    walletBalance: { xlm: number; usdc: number };
+    xlmUsdRate: number;
+} & StepProps) => {
     const trail = useTrail(2, {
         from: { opacity: 0, y: 10 },
         to: { opacity: 1, y: 0 },
@@ -354,11 +411,9 @@ const StepAmount: React.FC<
             <animated.div style={{ ...trail[1] }} className="space-y-2">
                 <button
                     onClick={onNext}
-                    disabled={amount <= 0}
                     className="w-full py-3 rounded-lg font-semibold text-white
                     bg-gradient-to-r from-accent-gold to-yellow-500
                     hover:from-yellow-400 hover:to-amber-500
-                    disabled:opacity-50 disabled:cursor-not-allowed
                     transition-all duration-200 transform hover:scale-105 active:scale-95"
                 >
                     Continue
@@ -390,7 +445,18 @@ const StepMessage: React.FC<
         onNext: () => void;
         onBack: () => void;
     } & StepProps
-> = ({ message, onMessageChange, onNext, onBack, reducedMotion }) => {
+> = ({ 
+    message, 
+    onMessageChange, 
+    onNext, 
+    onBack, 
+    reducedMotion 
+}: {
+    message: string;
+    onMessageChange: (message: string) => void;
+    onNext: () => void;
+    onBack: () => void;
+} & StepProps) => {
     const trail = useTrail(2, {
         from: { opacity: 0, y: 10 },
         to: { opacity: 1, y: 0 },
@@ -451,7 +517,17 @@ const StepConfirmation: React.FC<
     onBack,
     error,
     reducedMotion,
-}) => {
+}: {
+    amount: number;
+    currency: 'XLM' | 'USDC';
+    message: string;
+    artistName: string;
+    walletBalance: { xlm: number; usdc: number };
+    xlmUsdRate: number;
+    onConfirm: () => void;
+    onBack: () => void;
+    error: string | null;
+} & StepProps) => {
     const trail = useTrail(2, {
         from: { opacity: 0, y: 10 },
         to: { opacity: 1, y: 0 },
