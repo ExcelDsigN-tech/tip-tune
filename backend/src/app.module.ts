@@ -21,6 +21,7 @@ import { GenresModule } from "./genres/genres.module";
 import { ActivitiesModule } from "./activities/activities.module";
 import { FollowsModule } from "./follows/follows.module";
 import { EventEmitterModule } from "@nestjs/event-emitter";
+import { QueueModule } from "./queue/queue.module";
 import { GamificationModule } from "./gamification/gamification.module";
 import { ScheduledReleasesModule } from "./scheduled-releases/scheduled-releases.module";
 import { LeaderboardsModule } from "./leaderboards/leaderboards.module";
@@ -101,6 +102,8 @@ import { validate } from "./config/env.validation";
     GamificationModule,
     EventEmitterModule.forRoot(),
     ScheduledReleasesModule,
+    // Queue module provides DLQ handling for exhausted jobs
+    QueueModule,
     LeaderboardsModule,
     ReportsModule,
     FeesModule,
