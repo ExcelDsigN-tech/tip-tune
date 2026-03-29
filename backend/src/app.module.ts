@@ -44,6 +44,7 @@ import { RecommendationsModule } from "./recommendations/recommendations.module"
 import { EmbedModule } from "./embed/embed.module";
 import { ReferralModule } from "./social-sharing/referral.module";
 import { PayoutsModule } from "./artiste-payout/payouts.module";
+import { CollaborationModule } from "./collaboration/collaboration.module";
 import { validate } from "./config/env.validation";
 import { AdminModule } from "./admin/admin.module";
 import { VerificationModule } from "./verification/verification.module";
@@ -130,6 +131,7 @@ import { VerificationModule } from "./verification/verification.module";
     PayoutsModule,
     AdminModule,
     VerificationModule,
+    CollaborationModule,
   ],
   controllers: [],
   providers: [

@@ -129,7 +129,7 @@ export class NotificationsService {
 
   async sendCollaborationInvite(data: any) {
     const notification = this.notificationRepository.create({
-      userId: data.artistId,
+      userId: data.userId, // Use userId instead of artistId
       type: NotificationType.COLLABORATION_INVITE,
       title: "New Collaboration Invite",
       message: `${data.invitedBy} invited you to collaborate on "${data.trackTitle}"`,
@@ -147,7 +147,7 @@ export class NotificationsService {
     // Emit via WebSocket
     if (this.notificationsGateway) {
       this.notificationsGateway.sendNotificationToArtist(
-        data.artistId,
+        data.userId, // Use userId instead of artistId
         savedNotification,
       );
     }
@@ -157,7 +157,7 @@ export class NotificationsService {
 
   async sendCollaborationResponse(data: any) {
     const notification = this.notificationRepository.create({
-      userId: data.artistId,
+      userId: data.userId, // Use userId instead of artistId
       type: NotificationType.COLLABORATION_RESPONSE,
       title: `Collaboration ${data.status === "approved" ? "Accepted" : "Declined"}`,
       message: `${data.collaboratorName} ${data.status === "approved" ? "accepted" : "declined"} collaboration on "${data.trackTitle}"`,
@@ -174,7 +174,7 @@ export class NotificationsService {
     // Emit via WebSocket
     if (this.notificationsGateway) {
       this.notificationsGateway.sendNotificationToArtist(
-        data.artistId,
+        data.userId, // Use userId instead of artistId
         savedNotification,
       );
     }
