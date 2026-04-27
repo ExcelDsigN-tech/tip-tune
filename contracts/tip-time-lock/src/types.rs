@@ -1,5 +1,7 @@
 use soroban_sdk::{contracterror, contracttype, Address, String};
 
+pub const REFUND_DELAY_SECS: u64 = 30 * 24 * 60 * 60;
+
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
@@ -46,6 +48,8 @@ pub struct TimeLockTip {
 pub enum DataKey {
     Tip(String),
     ArtistTips(Address),
+    TipperTips(Address),
+    AllTips,
     Counter,
     ActorNonce(Address),
 }

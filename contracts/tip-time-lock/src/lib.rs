@@ -1,6 +1,7 @@
 #![no_std]
 #![allow(clippy::too_many_arguments)]
 
+mod queries;
 mod storage;
 mod types;
 
@@ -251,7 +252,7 @@ impl TimeLockContract {
 
         let current_time = env.ledger().timestamp();
         // Refund available 30 days after unlock_time
-        let refund_delay = 30 * 24 * 60 * 60; // 30 days in seconds
+        let refund_delay = crate::types::REFUND_DELAY_SECS;
         if current_time < tip.unlock_time + refund_delay {
             return Err(Error::RefundNotAvailableYet);
         }
@@ -299,5 +300,17 @@ impl TimeLockContract {
             }
         }
         pending
+    }
+
+    pub fn get_tipper_tip_ids(env: Env, tipper: Address) -> Vec<String> {
+        queries::get_tipper_tips(&env, &tipper)
+    }
+
+    pub fn get_tipper_tip_details(env: Env, tipper: Address) -> Vec<TimeLockTip> {
+        queries::get_tipper_tip_details(&env, &tipper)
+    }
+
+    pub fn get_refundable_locks(env: Env) -> Vec<TimeLockTip> {
+        queries::get_refundable_locks(&env)
     }
 }

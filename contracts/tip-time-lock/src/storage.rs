@@ -5,6 +5,16 @@ pub fn save_tip(env: &Env, lock_id: String, tip: &TimeLockTip) {
     let key = DataKey::Tip(lock_id.clone());
     env.storage().persistent().set(&key, tip);
 
+    // Update list of all tips
+    let all_tips_key = DataKey::AllTips;
+    let mut all_tips: Vec<String> = env
+        .storage()
+        .persistent()
+        .get(&all_tips_key)
+        .unwrap_or(Vec::new(env));
+    all_tips.push_back(lock_id.clone());
+    env.storage().persistent().set(&all_tips_key, &all_tips);
+
     // Update list of artist tips
     let artist_key = DataKey::ArtistTips(tip.artist.clone());
     let mut tips: Vec<String> = env
@@ -12,8 +22,18 @@ pub fn save_tip(env: &Env, lock_id: String, tip: &TimeLockTip) {
         .persistent()
         .get(&artist_key)
         .unwrap_or(Vec::new(env));
-    tips.push_back(lock_id);
+    tips.push_back(lock_id.clone());
     env.storage().persistent().set(&artist_key, &tips);
+
+    // Update list of tipper tips
+    let tipper_key = DataKey::TipperTips(tip.tipper.clone());
+    let mut tipper_tips: Vec<String> = env
+        .storage()
+        .persistent()
+        .get(&tipper_key)
+        .unwrap_or(Vec::new(env));
+    tipper_tips.push_back(lock_id);
+    env.storage().persistent().set(&tipper_key, &tipper_tips);
 }
 
 pub fn get_tip(env: &Env, lock_id: String) -> Option<TimeLockTip> {
@@ -32,6 +52,30 @@ pub fn get_artist_tips(env: &Env, artist: Address) -> Vec<String> {
         .persistent()
         .get(&artist_key)
         .unwrap_or(Vec::new(env))
+}
+
+pub fn get_tipper_tips(env: &Env, tipper: Address) -> Vec<String> {
+    let tipper_key = DataKey::TipperTips(tipper);
+    env.storage()
+        .persistent()
+        .get(&tipper_key)
+        .unwrap_or(Vec::new(env))
+}
+
+pub fn get_all_tips(env: &Env) -> Vec<TimeLockTip> {
+    let all_tips_key = DataKey::AllTips;
+    let tip_ids: Vec<String> = env
+        .storage()
+        .persistent()
+        .get(&all_tips_key)
+        .unwrap_or(Vec::new(env));
+    let mut tips = Vec::new(env);
+    for lock_id in tip_ids.iter() {
+        if let Some(tip) = get_tip(env, lock_id) {
+            tips.push_back(tip);
+        }
+    }
+    tips
 }
 
 pub fn increment_counter(env: &Env) -> u32 {
